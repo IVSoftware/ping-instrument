@@ -32,7 +32,6 @@ namespace ping_instrument
 
         CancellationTokenSource _cts = null;
         SemaphoreSlim ssBusy = new SemaphoreSlim(1);
-
         private void ExecMulticastPing()
         {
             ssBusy.Wait();
@@ -45,11 +44,17 @@ namespace ping_instrument
                     do
                     {
                         List<Task<PingReply>> asyncPings = new List<Task<PingReply>>();
+
+                        // Sends out the pings in rapid succession to execute asynchronously in parallel
                         foreach (var device in (Device[])Enum.GetValues(typeof(Device)))
                         {
                             asyncPings.Add(Task.Run(() => SinglePingAsync(device, _cts.Token)));
                         }
+
+                        // Waits for all the async pings to complete.
                         Task.WaitAll(asyncPings.ToArray());
+
+                        // See if flag is already cancelled
                         if (_cts.IsCancellationRequested) break;
 
                         foreach (var device in (Device[])Enum.GetValues(typeof(Device)))
@@ -62,9 +67,10 @@ namespace ping_instrument
                         Task.Delay(1000).Wait();
                         BeginInvoke((MethodInvoker)delegate
                         {
-                            WriteLine();
+                            WriteLine(); // Newline
                         });
-                    } while (!_cts.IsCancellationRequested);
+
+                    } while (!_cts.IsCancellationRequested); // Check if it's cancelled now
                 }
                 finally
                 {
