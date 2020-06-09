@@ -17,11 +17,10 @@ namespace ping_instrument
 {
     enum Device
     {
-        //InstrumentA,
-        //InstrumentB,
+        InstrumentA,
+        InstrumentB,
         InstrumentC
     }
-
 
     public partial class Form1 : Form
     {
@@ -55,18 +54,16 @@ namespace ping_instrument
 
                         foreach (var device in (Device[])Enum.GetValues(typeof(Device)))
                         {
+                            SetPanelImage(device, asyncPings[(int)device].Result);
                         }
 
-                        //Panel selectedPanel;
-                        //foreach (var device in (Device[])Enum.GetValues(typeof(Device)))
-                        //{
-                        //    selectedPanel = (Panel)this.Controls.Find((device).ToString(), true)[0];
-                        //    if (multicastPing.check(device.ToString()))
-                        //        selectedPanel.BackgroundImage = Image.FromFile(Configs.imagesUrl + "enable\\" + selectedPanel.AccessibleName + ".png");
-                        //    else
-                        //        selectedPanel.BackgroundImage = Image.FromFile(Configs.imagesUrl + "disable\\" + selectedPanel.AccessibleName + ".png");
-                        //}
+                        // I believe that it's very important to throttle this to
+                        // a reasonable number of repeats per second.
                         Task.Delay(1000).Wait();
+                        BeginInvoke((MethodInvoker)delegate
+                        {
+                            WriteLine();
+                        });
                     } while (!_cts.IsCancellationRequested);
                 }
                 finally
@@ -77,6 +74,37 @@ namespace ping_instrument
                 {
                     WriteLine("CANCELLED");
                 });
+            });
+        }
+
+        private void SetPanelImage(Device device, PingReply reply)
+        {
+            BeginInvoke((MethodInvoker)delegate
+            {
+                WriteLine("Setting panel image for " + device.ToString() + " " + reply.Status.ToString() );
+                Panel selectedPanel = (
+                    from Control unk in Controls
+                    where
+                        (unk is Panel) &&
+                        (unk.Name == device.ToString()) // ... or however you go about finding the panel...
+                    select unk as Panel
+                ).FirstOrDefault();
+
+                if (selectedPanel != null)
+                {
+                    switch (reply.Status)
+                    {
+                        case IPStatus.Success:
+                            // Set image for enabled
+                            break;
+                        case IPStatus.TimedOut:
+                            // Set image as disabled
+                            break;
+                        default:
+                            // Set image as disabled
+                            break;
+                    }
+                }
             });
         }
 
@@ -134,17 +162,6 @@ namespace ping_instrument
             {
                 ExecMulticastPing();
             }
-        }
-        class Image // Minimum Reproducable Excample Debug Only
-        {
-            public static System.Drawing.Image FromFile(string filename) 
-            { 
-                return null; // Debug only
-            }
-        }
-        class Configs  // Minimum Reproducable Excample Debug Only
-        {
-            public static string imagesUrl { get; } = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData) + @"\";
         }
     }
 }
