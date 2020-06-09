@@ -51,6 +51,7 @@ namespace ping_instrument
                             asyncPings.Add(Task.Run(() => SinglePingAsync(device, _cts.Token)));
                         }
                         Task.WaitAll(asyncPings.ToArray());
+                        if (_cts.IsCancellationRequested) break;
 
                         foreach (var device in (Device[])Enum.GetValues(typeof(Device)))
                         {
@@ -72,6 +73,10 @@ namespace ping_instrument
                 {
                     ssBusy.Release();
                 }
+                BeginInvoke((MethodInvoker)delegate
+                {
+                    WriteLine("CANCELLED");
+                });
             });
         }
 
@@ -115,6 +120,8 @@ namespace ping_instrument
         private void WriteLine(string text="")
         {
             richTextConsole.AppendText(text + Environment.NewLine);
+            richTextConsole.Select(richTextConsole.Text.Length, 0);
+            richTextConsole.ScrollToCaret();
         }
 
         private void checkBoxFlag_CheckedChanged(object sender, EventArgs e)
