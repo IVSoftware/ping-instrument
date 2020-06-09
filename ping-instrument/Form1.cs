@@ -5,8 +5,10 @@ using System.Data;
 using System.Diagnostics;
 using System.Drawing;
 using System.Linq;
+using System.Net;
 using System.Net.NetworkInformation;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 
@@ -15,8 +17,8 @@ namespace ping_instrument
 {
     enum Device
     {
-        InstrumentA,
-        InstrumentB,
+        //InstrumentA,
+        //InstrumentB,
         InstrumentC
     }
 
@@ -25,52 +27,106 @@ namespace ping_instrument
     {
         public Form1()
         {
-            InitializeComponent();
-            Ping pingSender = new Ping();
-            PingOptions options = new PingOptions();
-            // Use the default Ttl value which is 128,
-            // but change the fragmentation behavior.
-            options.DontFragment = true;
+            InitializeComponent(); 
         }
-        bool flag = false;
-        private void checkingDevice()
+        bool flag => checkBoxFlag.Checked;
+        Task _runningTask = null;
+
+
+        CancellationTokenSource _cts = null;
+        SemaphoreSlim ssBusy = new SemaphoreSlim(1);
+
+        private void ExecMulticastPing()
         {
+            ssBusy.Wait();
             Task.Run(() =>
             {
-                do
+                try
                 {
-                    Panel selectedPanel;
-                    multicastPing.send();
-                    foreach (var device in (Device[])Enum.GetValues(typeof(Device)))
-                    {
-                        selectedPanel = (Panel)this.Controls.Find((device).ToString(), true)[0];
-                        if (multicastPing.check(device.ToString()))
-                            selectedPanel.BackgroundImage = Image.FromFile(Configs.imagesUrl + "enable\\" + selectedPanel.AccessibleName + ".png");
-                        else
-                            selectedPanel.BackgroundImage = Image.FromFile(Configs.imagesUrl + "disable\\" + selectedPanel.AccessibleName + ".png");
-                    }
-                } while (!flag);
-                // TODO
-                // delete instrument object after using in this snippet code
-            })
-            .GetAwaiter()
-            .OnCompleted(() =>
-            {
+                    _cts = new CancellationTokenSource();
 
+                    do
+                    {
+                        List<Task<PingReply>> asyncPings = new List<Task<PingReply>>();
+                        foreach (var device in (Device[])Enum.GetValues(typeof(Device)))
+                        {
+                            asyncPings.Add(Task.Run<PingReply>(() => SinglePingAsync(device, _cts.Token)));
+                        }
+                        Task.WaitAll(asyncPings.ToArray());
+
+                        foreach (var device in (Device[])Enum.GetValues(typeof(Device)))
+                        {
+                        }
+
+                        //Panel selectedPanel;
+                        //foreach (var device in (Device[])Enum.GetValues(typeof(Device)))
+                        //{
+                        //    selectedPanel = (Panel)this.Controls.Find((device).ToString(), true)[0];
+                        //    if (multicastPing.check(device.ToString()))
+                        //        selectedPanel.BackgroundImage = Image.FromFile(Configs.imagesUrl + "enable\\" + selectedPanel.AccessibleName + ".png");
+                        //    else
+                        //        selectedPanel.BackgroundImage = Image.FromFile(Configs.imagesUrl + "disable\\" + selectedPanel.AccessibleName + ".png");
+                        //}
+                    } while (_cts.IsCancellationRequested);
+                }
+                finally
+                {
+                    ssBusy.Release();
+                }
             });
         }
 
-        class multicastPing
+        // vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv
+        // Do this:
+        const string URL_FOR_TEST = @"www.ivsoftware.net";
+        // Not this (which will throw exception)
+        // const string URL_FOR_TEST = @"http://www.ivsoftware.net";
+        // ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        private PingReply SinglePingAsync(Device device, CancellationToken token)
         {
-
-            public static bool send()
+            if(token.IsCancellationRequested)
             {
-                return true;
+                return null;
             }
-
-            public static bool check(string name)
+            Ping pingSender = new Ping();
+            PingOptions options = new PingOptions()
             {
-                return true;
+                DontFragment = true
+            };
+            PingReply reply = null;
+            try
+            {
+                reply = pingSender.Send(URL_FOR_TEST, 10, Encoding.ASCII.GetBytes("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"), options);
+            }
+            catch (Exception ex)
+            {
+                Debug.Assert(false, ex.Message);
+            }
+            if (reply.Status == IPStatus.Success)
+            {
+                WriteLine("Address: " + reply.Address.ToString());
+                WriteLine("RoundTrip time: " + reply.RoundtripTime);
+                WriteLine("Time to live: " + reply.Options.Ttl);
+                WriteLine("Don't fragment: " + reply.Options.DontFragment);
+                WriteLine("Buffer size: " + reply.Buffer.Length);
+            }
+            return reply;
+        }
+
+        private void WriteLine(string text)
+        {
+            richTextConsole.AppendText(text + Environment.NewLine);
+        }
+
+        private void checkBoxFlag_CheckedChanged(object sender, EventArgs e)
+        {
+            if(((CheckBox)sender).Checked)
+            {
+                _cts.Cancel();
+            }
+            else
+            {
+                ExecMulticastPing();
             }
         }
         class Image // Minimum Reproducable Excample Debug Only
