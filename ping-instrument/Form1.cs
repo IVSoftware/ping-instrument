@@ -65,7 +65,8 @@ namespace ping_instrument
                         //    else
                         //        selectedPanel.BackgroundImage = Image.FromFile(Configs.imagesUrl + "disable\\" + selectedPanel.AccessibleName + ".png");
                         //}
-                    } while (_cts.IsCancellationRequested);
+                        Task.Delay(1000).Wait();
+                    } while (!_cts.IsCancellationRequested);
                 }
                 finally
                 {
@@ -80,43 +81,38 @@ namespace ping_instrument
         // Not this (which will throw exception)
         // const string URL_FOR_TEST = @"http://www.ivsoftware.com";
         // ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-        private async Task<PingReply> SinglePingAsync(Device device, CancellationToken token)
+        private PingReply SinglePingAsync(Device device, CancellationToken token)
         {
             if(token.IsCancellationRequested)
             {
                 return null;
             }
             Ping pingSender = new Ping();
-            pingSender.PingCompleted += PingSender_PingCompleted;
             PingOptions options = new PingOptions()
             {
                 DontFragment = true
             };
-            PingReply reply = null;
-            await pingSender.SendPingAsync(URL_FOR_TEST);
-            return reply;
-        }
-
-        private void PingSender_PingCompleted(object sender, PingCompletedEventArgs e)
-        {
+            PingReply reply = pingSender.Send(URL_FOR_TEST);
             BeginInvoke((MethodInvoker)delegate
             {
-                if (e.Reply.Status == IPStatus.Success)
+                if (reply.Status == IPStatus.Success)
                 {
-                    WriteLine("Address: " + e.Reply.Address.ToString());
-                    WriteLine("RoundTrip time: " + e.Reply.RoundtripTime);
-                    WriteLine("Time to live: " + e.Reply.Options.Ttl);
-                    WriteLine("Don't fragment: " + e.Reply.Options.DontFragment);
-                    WriteLine("Buffer size: " + e.Reply.Buffer.Length);
+                    WriteLine("Address: " + reply.Address.ToString());
+                    WriteLine("RoundTrip time: " + reply.RoundtripTime);
+                    WriteLine("Time to live: " + reply.Options.Ttl);
+                    WriteLine("Don't fragment: " + reply.Options.DontFragment);
+                    WriteLine("Buffer size: " + reply.Buffer.Length);
+                    WriteLine();
                 }
                 else
                 {
                     WriteLine("REQUEST TIMEOUT");
                 }
             });
+            return reply;
         }
 
-        private void WriteLine(string text)
+        private void WriteLine(string text="")
         {
             richTextConsole.AppendText(text + Environment.NewLine);
         }
