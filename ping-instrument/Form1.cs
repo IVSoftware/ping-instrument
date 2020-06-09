@@ -30,8 +30,6 @@ namespace ping_instrument
             InitializeComponent(); 
         }
         bool flag => checkBoxFlag.Checked;
-        Task _runningTask = null;
-
 
         CancellationTokenSource _cts = null;
         SemaphoreSlim ssBusy = new SemaphoreSlim(1);
@@ -50,7 +48,7 @@ namespace ping_instrument
                         List<Task<PingReply>> asyncPings = new List<Task<PingReply>>();
                         foreach (var device in (Device[])Enum.GetValues(typeof(Device)))
                         {
-                            asyncPings.Add(Task.Run<PingReply>(() => SinglePingAsync(device, _cts.Token)));
+                            asyncPings.Add(Task.Run(() => SinglePingAsync(device, _cts.Token)));
                         }
                         Task.WaitAll(asyncPings.ToArray());
 
@@ -78,39 +76,44 @@ namespace ping_instrument
 
         // vvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvvv
         // Do this:
-        const string URL_FOR_TEST = @"www.ivsoftware.net";
+        const string URL_FOR_TEST = @"www.ivsoftware.com";
         // Not this (which will throw exception)
-        // const string URL_FOR_TEST = @"http://www.ivsoftware.net";
+        // const string URL_FOR_TEST = @"http://www.ivsoftware.com";
         // ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-        private PingReply SinglePingAsync(Device device, CancellationToken token)
+        private async Task<PingReply> SinglePingAsync(Device device, CancellationToken token)
         {
             if(token.IsCancellationRequested)
             {
                 return null;
             }
             Ping pingSender = new Ping();
+            pingSender.PingCompleted += PingSender_PingCompleted;
             PingOptions options = new PingOptions()
             {
                 DontFragment = true
             };
             PingReply reply = null;
-            try
-            {
-                reply = pingSender.Send(URL_FOR_TEST, 10, Encoding.ASCII.GetBytes("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"), options);
-            }
-            catch (Exception ex)
-            {
-                Debug.Assert(false, ex.Message);
-            }
-            if (reply.Status == IPStatus.Success)
-            {
-                WriteLine("Address: " + reply.Address.ToString());
-                WriteLine("RoundTrip time: " + reply.RoundtripTime);
-                WriteLine("Time to live: " + reply.Options.Ttl);
-                WriteLine("Don't fragment: " + reply.Options.DontFragment);
-                WriteLine("Buffer size: " + reply.Buffer.Length);
-            }
+            await pingSender.SendPingAsync(URL_FOR_TEST);
             return reply;
+        }
+
+        private void PingSender_PingCompleted(object sender, PingCompletedEventArgs e)
+        {
+            BeginInvoke((MethodInvoker)delegate
+            {
+                if (e.Reply.Status == IPStatus.Success)
+                {
+                    WriteLine("Address: " + e.Reply.Address.ToString());
+                    WriteLine("RoundTrip time: " + e.Reply.RoundtripTime);
+                    WriteLine("Time to live: " + e.Reply.Options.Ttl);
+                    WriteLine("Don't fragment: " + e.Reply.Options.DontFragment);
+                    WriteLine("Buffer size: " + e.Reply.Buffer.Length);
+                }
+                else
+                {
+                    WriteLine("REQUEST TIMEOUT");
+                }
+            });
         }
 
         private void WriteLine(string text)
